@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="6254" systemVersion="14B25" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" initialViewController="vXZ-lx-hvc">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="6751" systemVersion="14C1514" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" initialViewController="vXZ-lx-hvc">
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="6247"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="6736"/>
         <capability name="Aspect ratio constraints" minToolsVersion="5.1"/>
         <capability name="Constraints to layout margins" minToolsVersion="6.0"/>
     </dependencies>
@@ -78,6 +78,27 @@
                                 <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <nil key="highlightedColor"/>
                             </label>
+                            <button opaque="NO" contentMode="scaleToFill" misplaced="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="roundedRect" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="8QY-w3-Cn6">
+                                <rect key="frame" x="222" y="256" width="125" height="24"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="125" id="Dq0-zk-3th"/>
+                                </constraints>
+                                <inset key="contentEdgeInsets" minX="9" minY="3" maxX="9" maxY="3"/>
+                                <state key="normal" title="Alt Hold OFF">
+                                    <color key="titleShadowColor" white="0.5" alpha="1" colorSpace="calibratedWhite"/>
+                                </state>
+                                <userDefinedRuntimeAttributes>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.borderWidth">
+                                        <integer key="value" value="1"/>
+                                    </userDefinedRuntimeAttribute>
+                                    <userDefinedRuntimeAttribute type="number" keyPath="layer.cornerRadius">
+                                        <integer key="value" value="4"/>
+                                    </userDefinedRuntimeAttribute>
+                                </userDefinedRuntimeAttributes>
+                                <connections>
+                                    <action selector="altHoldClick:" destination="vXZ-lx-hvc" eventType="touchUpInside" id="cWa-Xz-xiC"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="calibratedWhite"/>
                         <constraints>
@@ -92,8 +113,10 @@
                             <constraint firstItem="eY8-VG-3Hc" firstAttribute="top" secondItem="BBt-Ae-QU0" secondAttribute="bottom" id="RhX-RI-kGn"/>
                             <constraint firstItem="uYX-Ot-m4w" firstAttribute="top" secondItem="eY8-VG-3Hc" secondAttribute="bottom" id="Soy-3a-5TR"/>
                             <constraint firstItem="Ta2-ZF-aps" firstAttribute="top" secondItem="BBt-Ae-QU0" secondAttribute="bottom" id="Y5F-Ct-jjf"/>
+                            <constraint firstItem="8QY-w3-Cn6" firstAttribute="centerX" secondItem="cqv-t8-690" secondAttribute="centerX" id="bhm-Ki-78b"/>
                             <constraint firstItem="M4K-nN-6na" firstAttribute="top" secondItem="zUR-3g-aLF" secondAttribute="bottom" constant="41" id="cCc-En-cMW"/>
                             <constraint firstItem="eY8-VG-3Hc" firstAttribute="leading" secondItem="Ta2-ZF-aps" secondAttribute="trailing" constant="80" id="fto-Cd-7E9"/>
+                            <constraint firstAttribute="centerY" secondItem="8QY-w3-Cn6" secondAttribute="centerY" id="gX2-qd-utv"/>
                             <constraint firstAttribute="trailing" secondItem="eY8-VG-3Hc" secondAttribute="trailing" id="jfl-sp-xBb"/>
                             <constraint firstAttribute="centerX" secondItem="ax9-lF-Vx6" secondAttribute="centerX" id="r2C-Gf-qTu"/>
                             <constraint firstItem="zUR-3g-aLF" firstAttribute="centerX" secondItem="ax9-lF-Vx6" secondAttribute="centerX" constant="-0.5" id="x96-Dx-28Z"/>
@@ -103,6 +126,7 @@
                     <navigationItem key="navigationItem" id="P9X-at-VK1"/>
                     <simulatedOrientationMetrics key="simulatedOrientationMetrics" orientation="landscapeRight"/>
                     <connections>
+                        <outlet property="altHoldButton" destination="8QY-w3-Cn6" id="Qus-qm-0S4"/>
                         <outlet property="connectButton" destination="zUR-3g-aLF" id="bA2-Z1-bbX"/>
                         <outlet property="connectProgress" destination="ax9-lF-Vx6" id="VCb-4D-6O6"/>
                         <outlet property="leftView" destination="Ta2-ZF-aps" id="WLu-gg-T9d"/>
