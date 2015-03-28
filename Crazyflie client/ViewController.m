@@ -31,11 +31,10 @@
 #define CRAZYFLIE_SERVICE @"00000201-1C7F-4F9E-947B-43B7C00A9A08"
 #define CRTP_CHARACTERISTIC @"00000202-1C7F-4F9E-947B-43B7C00A9A08"
 
-
 #define LINEAR_PR YES
 #define LINEAR_THRUST YES
 
-@interface ViewController () {
+@interface ViewController() {
     BCJoystick *leftJoystick;
     BCJoystick *rightJoystick;
     bool canBluetooth;
@@ -43,6 +42,7 @@
     bool sent;
     
     bool locked;
+    bool altHold;
     
     float pitchRate;
     float yawRate;
@@ -63,6 +63,7 @@
 
 @property (weak, nonatomic) IBOutlet UILabel *unlockLabel;
 @property (weak, nonatomic) IBOutlet UIButton *connectButton;
+@property (weak, nonatomic) IBOutlet UIButton *altHoldButton;
 @property (weak, nonatomic) IBOutlet UIButton *settingsButton;
 @property (weak, nonatomic) IBOutlet UIProgressView *connectProgress;
 
@@ -79,8 +80,7 @@
 
 @implementation ViewController
 
-- (void)viewDidLoad
-{
+- (void)viewDidLoad {
     [super viewDidLoad];
 	// Init instance variables
     self.connectProgress.progress = 0;
@@ -90,10 +90,13 @@
     sent = NO;
     state = stateIdle;
     locked = YES;
+	altHold = NO;
     
     //Init button border color
     _connectButton.layer.borderColor = [_connectButton tintColor].CGColor;
     _settingsButton.layer.borderColor = [_settingsButton tintColor].CGColor;
+	
+    _altHoldButton.enabled = NO;
     
     //Init joysticks
     CGRect frame = [[UIScreen mainScreen] bounds];
@@ -112,8 +115,7 @@
     centralManager = [[CBCentralManager alloc] initWithDelegate:self queue:nil];
 }
 
-- (void) loadDefault
-{
+- (void)loadDefault {
     NSURL *defaultPrefsFile = [[NSBundle mainBundle] URLForResource:@"DefaultPreferences" withExtension:@"plist"];
     NSDictionary *defaultPrefs = [NSDictionary dictionaryWithContentsOfURL:defaultPrefsFile];
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -122,8 +124,7 @@
     [self updateSettings:defaults];
 }
 
-- (void) saveDefault
-{
+- (void)saveDefault {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
     [defaults setObject:[NSNumber numberWithInt:controlMode] forKey:@"controlMode"];
@@ -133,8 +134,7 @@
     [self updateSettings:defaults];
 }
 
-- (void) updateSettings: (NSUserDefaults*) defaults
-{
+- (void)updateSettings: (NSUserDefaults*) defaults {
     static const NSString *mode2str[4][4] = {{@"Yaw",  @"Pitch",  @"Roll", @"Thrust"},
                                              {@"Yaw",  @"Thrust", @"Roll", @"Pitch"},
                                              {@"Roll", @"Pitch",  @"Yaw",  @"Thrust"},
@@ -172,13 +172,11 @@
     }
 }
 
-- (void) joystickMoved: (BCJoystick*)joystick
-{
+- (void)joystickMoved: (BCJoystick*)joystick {
     NSLog(@"Joystick moved to %f,%f.", joystick.x, joystick.y);
 }
 
--(void) joystickTouch:(BCJoystick *)jostick
-{
+-(void)joystickTouch:(BCJoystick *)jostick {
     if (leftJoystick.activated && rightJoystick.activated) {
         self.unlockLabel.hidden = true;
         locked = NO;
@@ -188,8 +186,7 @@
     }
 }
 
-- (void)didReceiveMemoryWarning
-{
+- (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
 }
@@ -197,11 +194,11 @@
 - (IBAction)connectClick:(id)sender {
     if (canBluetooth) {
         if (state == stateIdle) {
-            NSArray * connectedPeritheral = [centralManager retrieveConnectedPeripheralsWithServices:@[ [CBUUID UUIDWithString:CRAZYFLIE_SERVICE] ]];
+            NSArray * connectedPeriferals = [centralManager retrieveConnectedPeripheralsWithServices:@[[CBUUID UUIDWithString:CRAZYFLIE_SERVICE]]];
             
-            if (connectedPeritheral.count > 0) {
+            if (connectedPeriferals.count > 0) {
                 NSLog(@"Found Crazyflie already connected!");
-                _connectingPeritheral = [connectedPeritheral firstObject];
+                _connectingPeritheral = [connectedPeriferals firstObject];
                 [centralManager connectPeripheral:_connectingPeritheral options:nil];
                 [_connectProgress setProgress:0.25 animated:YES];
                 state = stateConnecting;
@@ -241,12 +238,37 @@
     }
 }
 
+- (IBAction)altHoldClick:(id)sender {
+	struct __attribute__((packed)) {
+		uint8_t header;
+		uint8_t ident;
+		uint8_t val;
+	} altHoldPacket;
+
+	NSData *data;
+	altHoldPacket.header = ((0x02 & 0x0f) << 4 | 3 << 2 |(2 & 0x03));
+	altHoldPacket.ident = 11;
+	
+	if(altHold == NO) {
+		altHold = YES;
+		altHoldPacket.val = 1;
+		[(UIButton *)sender setTitle:@"Alt Hold ON" forState:UIControlStateNormal];
+	}
+	else {
+		altHold = NO;
+		altHoldPacket.val = 0;
+		[(UIButton *)sender setTitle:@"Alt Hold OFF" forState:UIControlStateNormal];
+	}
+	
+	data = [NSData dataWithBytes:&altHoldPacket length:sizeof(altHoldPacket)];
+	[_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
+}
+
 - (IBAction)settingsClick:(id)sender {
     [self performSegueWithIdentifier:@"settings" sender:nil];
 }
 
-- (void) scanningTimeout:(NSTimer*)timer
-{
+- (void)scanningTimeout:(NSTimer*)timer {
     NSLog(@"Scan timeout, stop scan");
     [centralManager stopScan];
     [self.scanTimer invalidate];
@@ -260,8 +282,7 @@
     [self.connectButton setTitle:@"Connect" forState:UIControlStateNormal];
 }
 
-- (void) centralManagerDidUpdateState:(CBCentralManager *)central
-{
+- (void)centralManagerDidUpdateState:(CBCentralManager *)central {
     if (central.state == CBCentralManagerStatePoweredOn) {
         NSLog(@"Bluetooth is available!");
         canBluetooth = YES;
@@ -271,9 +292,8 @@
     }
 }
 
-- (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisementData RSSI:(NSNumber *)RSSI
-{
-    NSLog(@"Discodered peripheral: %@", peripheral.name);
+- (void)centralManager:(CBCentralManager *)central didDiscoverPeripheral:(CBPeripheral *)peripheral advertisementData:(NSDictionary *)advertisementData RSSI:(NSNumber *)RSSI {
+    NSLog(@"Discovered peripheral: %@", peripheral.name);
     if ([peripheral.name  isEqual: @"Crazyflie"]) {
         [self.scanTimer invalidate];
         self.scanTimer = nil;
@@ -287,19 +307,18 @@
     }
 }
 
-- (void)centralManager:(CBCentralManager *)central didConnectPeripheral:(CBPeripheral *)peripheral
-{
-    NSLog(@"Preipheral connected");
+- (void)centralManager:(CBCentralManager *)central didConnectPeripheral:(CBPeripheral *)peripheral {
+    NSLog(@"Peripheral connected");
     crazyflie = peripheral;
     peripheral.delegate = self;
     
-    [peripheral discoverServices:@[ [CBUUID UUIDWithString:CRAZYFLIE_SERVICE] ]];
+    [peripheral discoverServices:@[[CBUUID UUIDWithString:CRAZYFLIE_SERVICE]]];
     
     [self.connectProgress setProgress:0.5 animated:YES];
+	_altHoldButton.enabled = YES;
 }
 
-- (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error
-{
+- (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
     state = stateIdle;
     [(UIButton *)_connectButton setTitle:@"Connect" forState:UIControlStateNormal];
     
@@ -311,20 +330,18 @@
     [alert show];
 }
 
-- (void)peripheral:(CBPeripheral *)peripheral didDiscoverServices:(NSError *)error
-{
+- (void)peripheral:(CBPeripheral *)peripheral didDiscoverServices:(NSError *)error {
     for (CBService *service in peripheral.services) {
-        NSLog(@"Discovered serivce %@", [service.UUID UUIDString]);
+        NSLog(@"Discovered service %@", [service.UUID UUIDString]);
         if ([service.UUID isEqual:[CBUUID UUIDWithString:CRAZYFLIE_SERVICE]]) {
-            [peripheral discoverCharacteristics:@[ [CBUUID UUIDWithString:CRTP_CHARACTERISTIC] ] forService:service];
+            [peripheral discoverCharacteristics:@[[CBUUID UUIDWithString:CRTP_CHARACTERISTIC]] forService:service];
         }
     }
     
     [self.connectProgress setProgress:0.75 animated:YES];
 }
 
-- (void)peripheral:(CBPeripheral *)peripheral didDiscoverCharacteristicsForService:(CBService *)service error:(NSError *)error
-{
+- (void)peripheral:(CBPeripheral *)peripheral didDiscoverCharacteristicsForService:(CBService *)service error:(NSError *)error {
     for (CBCharacteristic *characteristic in service.characteristics) {
         NSLog(@"Discovered characteristic %@", [characteristic.UUID UUIDString]);
         if ([characteristic.UUID isEqual:[CBUUID UUIDWithString:CRTP_CHARACTERISTIC]]) {
@@ -340,8 +357,7 @@
     [_connectButton setTitle:@"Disconnect" forState:UIControlStateNormal];
 }
 
--(void) sendCommander: (NSTimer*)timer
-{
+- (void)sendCommander:(NSTimer*)timer {
     struct __attribute__((packed)) {
         uint8_t header;
         float roll;
@@ -362,7 +378,8 @@
         joysticks[1] = leftJoystick.y;
         joysticks[2] = rightJoystick.x;
         joysticks[3] = rightJoystick.y;
-    } else {
+    }
+	else {
         joysticks[0] = 0;
         joysticks[1] = 0;
         joysticks[2] = 0;
@@ -374,8 +391,7 @@
     jsYaw    = joysticks[mode2axis[controlMode-1][2]];
     jsThrust = joysticks[mode2axis[controlMode-1][3]];
     
-    if (sent) {
-        NSLog(@"Send commander!");
+    if(sent) {
         NSData *data;
         
         commanderPacket.header = 0x30;
@@ -383,7 +399,8 @@
         if (LINEAR_PR) {
             commanderPacket.pitch = jsPitch*-1*pitchRate;
             commanderPacket.roll = jsRoll*pitchRate;
-        } else {
+        }
+		else {
             commanderPacket.pitch = pow(jsPitch, 2) * -1 * pitchRate * ((jsPitch>0)?1:-1);
             commanderPacket.roll = pow(jsRoll, 2) * pitchRate * ((jsRoll>0)?1:-1);
         }
@@ -393,42 +410,40 @@
         int thrust;
         if (LINEAR_THRUST) {
             thrust = jsThrust*65535*(maxThrust/100);
-        } else {
+        }
+		else {
             thrust = sqrt(jsThrust)*65535*(maxThrust/100);
         }
-        if (thrust>65535) thrust = 65535;
+        if (thrust > 65535) thrust = 65535;
         if (thrust < 0) thrust = 0;
+		if (altHold == true) thrust = 32767;
         commanderPacket.thrust = thrust;
-        
+
         data = [NSData dataWithBytes:&commanderPacket length:sizeof(commanderPacket)];
-        
+		//NSLog(@"DATA : %@", data);
         [_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
-        sent = NO;
-    } else {
-        NSLog(@"Missed commander update!");
+		
+		sent = NO;
     }
+//	else {
+//        NSLog(@"Missed commander update!");
+//    }
 }
 
-- (void)peripheral:(CBPeripheral *)peripheral didWriteValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error
-{
+- (void)peripheral:(CBPeripheral *)peripheral didWriteValueForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error {
     if (error) {
-        NSLog(@"Error writing characteristic value: %@",
-              [error localizedDescription]);
         return;
     }
-    NSLog(@"Value written");
-    sent  = YES;
+    sent = YES;
 }
 
 - (void)peripheral:(CBPeripheral *)peripheral didUpdateNotificationStateForCharacteristic:(CBCharacteristic *)characteristic error:(NSError *)error {
     if (error) {
-        NSLog(@"Error changing notification state: %@",
-              [error localizedDescription]);
+        NSLog(@"Error changing notification state: %@", [error localizedDescription]);
     }
 }
 
-- (void)centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error
-{
+- (void)centralManager:(CBCentralManager *)central didDisconnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
     if (error) {
         NSLog(@"Error disconnected from peripheral: %@",
               [error localizedDescription]);
@@ -445,14 +460,13 @@
     _crtpCharacteristic = nil;
     _connectingPeritheral = nil;
     [_connectButton setTitle:@"Connect" forState:UIControlStateNormal];
+	_altHoldButton.enabled = NO;
     state = stateIdle;
 }
 
-- (BOOL) prefersStatusBarHidden
-{
+- (BOOL)prefersStatusBarHidden {
     return YES;
 }
-
 
 #pragma mark - Navigation
 
