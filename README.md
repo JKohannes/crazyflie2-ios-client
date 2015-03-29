@@ -1,6 +1,7 @@
 # crazyflie2-ios-client
 
 This branch provides three extra functionalities :
-1/ altitude hold
-2/ take off + altitude hold 
-3/ landing
+<ol>
+<li> altitude hold 
+<li> take off + altitude hold 
+<li> landing
