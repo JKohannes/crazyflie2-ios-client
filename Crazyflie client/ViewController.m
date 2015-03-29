@@ -42,11 +42,15 @@
     bool sent;
     
     bool locked;
-    bool altHold;
-    
+	bool altHold;
+	bool landing;
+	
+	int takeOff;
+	
     float pitchRate;
     float yawRate;
     float maxThrust;
+	float previousThrust;
     int controlMode;
     
     enum {stateIdle, stateScanning, stateConnecting, stateConnected} state;
@@ -56,7 +60,6 @@
     CBCentralManager *centralManager;
     
     SettingsViewController *settingsViewController;
-    
     NSMutableDictionary *sensitivities;
     NSString *sensitivitySetting;
 }
@@ -64,6 +67,8 @@
 @property (weak, nonatomic) IBOutlet UILabel *unlockLabel;
 @property (weak, nonatomic) IBOutlet UIButton *connectButton;
 @property (weak, nonatomic) IBOutlet UIButton *altHoldButton;
+@property (weak, nonatomic) IBOutlet UIButton *takeOffButton;
+@property (weak, nonatomic) IBOutlet UIButton *landButton;
 @property (weak, nonatomic) IBOutlet UIButton *settingsButton;
 @property (weak, nonatomic) IBOutlet UIProgressView *connectProgress;
 
@@ -91,13 +96,16 @@
     state = stateIdle;
     locked = YES;
 	altHold = NO;
-    
+	landing = NO;
+	takeOff = 0;
+	
     //Init button border color
     _connectButton.layer.borderColor = [_connectButton tintColor].CGColor;
     _settingsButton.layer.borderColor = [_settingsButton tintColor].CGColor;
+	_altHoldButton.layer.borderColor = [_settingsButton tintColor].CGColor;
+	_takeOffButton.layer.borderColor = [_settingsButton tintColor].CGColor;
+	_landButton.layer.borderColor = [_settingsButton tintColor].CGColor;
 	
-    _altHoldButton.enabled = NO;
-    
     //Init joysticks
     CGRect frame = [[UIScreen mainScreen] bounds];
     leftJoystick = [[BCJoystick alloc] initWithFrame:frame];
@@ -252,16 +260,26 @@
 	if(altHold == NO) {
 		altHold = YES;
 		altHoldPacket.val = 1;
-		[(UIButton *)sender setTitle:@"Alt Hold ON" forState:UIControlStateNormal];
+		[_altHoldButton setTitle:@"AltHold ON" forState:UIControlStateNormal];
 	}
 	else {
 		altHold = NO;
 		altHoldPacket.val = 0;
-		[(UIButton *)sender setTitle:@"Alt Hold OFF" forState:UIControlStateNormal];
+		[_altHoldButton setTitle:@"AltHold OFF" forState:UIControlStateNormal];
 	}
 	
 	data = [NSData dataWithBytes:&altHoldPacket length:sizeof(altHoldPacket)];
 	[_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
+}
+
+- (IBAction)takeOffClick:(id)sender {
+	takeOff = 10;
+	if (altHold == NO) [self altHoldClick:nil];
+}
+
+- (IBAction)landClick:(id)sender {
+	landing = YES;
+	if (altHold == YES) [self altHoldClick:nil];
 }
 
 - (IBAction)settingsClick:(id)sender {
@@ -315,7 +333,6 @@
     [peripheral discoverServices:@[[CBUUID UUIDWithString:CRAZYFLIE_SERVICE]]];
     
     [self.connectProgress setProgress:0.5 animated:YES];
-	_altHoldButton.enabled = YES;
 }
 
 - (void)centralManager:(CBCentralManager *)central didFailToConnectPeripheral:(CBPeripheral *)peripheral error:(NSError *)error {
@@ -347,7 +364,7 @@
         if ([characteristic.UUID isEqual:[CBUUID UUIDWithString:CRTP_CHARACTERISTIC]]) {
             self.crtpCharacteristic = characteristic;
             sent = YES;
-            self.commanderTimer = [NSTimer scheduledTimerWithTimeInterval:0.05 target:self selector:@selector(sendCommander:) userInfo:nil repeats:YES];
+            self.commanderTimer = [NSTimer scheduledTimerWithTimeInterval:0.1 target:self selector:@selector(sendCommander) userInfo:nil repeats:YES];
             [peripheral setNotifyValue:YES forCharacteristic:self.crtpCharacteristic];
         }
         
@@ -357,14 +374,16 @@
     [_connectButton setTitle:@"Disconnect" forState:UIControlStateNormal];
 }
 
-- (void)sendCommander:(NSTimer*)timer {
-    struct __attribute__((packed)) {
-        uint8_t header;
-        float roll;
-        float pitch;
-        float yaw;
-        uint16_t thrust;
-    } commanderPacket;
+- (void)sendCommander {
+	
+	struct __attribute__((packed)) {
+		uint8_t header;
+		float roll;
+		float pitch;
+		float yaw;
+		uint16_t thrust;
+	} commanderPacket;
+	
     // Mode sorted by pitch, roll, yaw, thrust versus lx, ly, rx, ry
     static const int mode2axis[4][4] = {{1, 2, 0, 3},
                                         {3, 2, 0, 1},
@@ -416,9 +435,17 @@
         }
         if (thrust > 65535) thrust = 65535;
         if (thrust < 0) thrust = 0;
-		if (altHold == true) thrust = 32767;
+		// send 32767 for altitude hold
+		if (altHold == YES) thrust = 32767;
+		if (landing == YES) thrust = previousThrust * 0.97;
+		if (takeOff > 0) {
+			thrust = 50000;
+			takeOff --;
+		}
         commanderPacket.thrust = thrust;
-
+		// store the thrust for landing
+		previousThrust = thrust;
+		
         data = [NSData dataWithBytes:&commanderPacket length:sizeof(commanderPacket)];
 		//NSLog(@"DATA : %@", data);
         [_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
@@ -460,7 +487,6 @@
     _crtpCharacteristic = nil;
     _connectingPeritheral = nil;
     [_connectButton setTitle:@"Connect" forState:UIControlStateNormal];
-	_altHoldButton.enabled = NO;
     state = stateIdle;
 }
 
