@@ -43,14 +43,10 @@
     
     bool locked;
 	bool altHold;
-	bool landing;
-	
-	int takeOff;
 	
     float pitchRate;
     float yawRate;
     float maxThrust;
-	float previousThrust;
     int controlMode;
     
     enum {stateIdle, stateScanning, stateConnecting, stateConnected} state;
@@ -67,8 +63,6 @@
 @property (weak, nonatomic) IBOutlet UILabel *unlockLabel;
 @property (weak, nonatomic) IBOutlet UIButton *connectButton;
 @property (weak, nonatomic) IBOutlet UIButton *altHoldButton;
-@property (weak, nonatomic) IBOutlet UIButton *takeOffButton;
-@property (weak, nonatomic) IBOutlet UIButton *landButton;
 @property (weak, nonatomic) IBOutlet UIButton *settingsButton;
 @property (weak, nonatomic) IBOutlet UIProgressView *connectProgress;
 
@@ -96,15 +90,11 @@
     state = stateIdle;
     locked = YES;
 	altHold = NO;
-	landing = NO;
-	takeOff = 0;
 	
     //Init button border color
     _connectButton.layer.borderColor = [_connectButton tintColor].CGColor;
     _settingsButton.layer.borderColor = [_settingsButton tintColor].CGColor;
 	_altHoldButton.layer.borderColor = [_settingsButton tintColor].CGColor;
-	_takeOffButton.layer.borderColor = [_settingsButton tintColor].CGColor;
-	_landButton.layer.borderColor = [_settingsButton tintColor].CGColor;
 	
     //Init joysticks
     CGRect frame = [[UIScreen mainScreen] bounds];
@@ -247,39 +237,32 @@
 }
 
 - (IBAction)altHoldClick:(id)sender {
-	struct __attribute__((packed)) {
-		uint8_t header;
-		uint8_t ident;
-		uint8_t val;
-	} altHoldPacket;
-
-	NSData *data;
-	altHoldPacket.header = ((0x02 & 0x0f) << 4 | 3 << 2 |(2 & 0x03));
-	altHoldPacket.ident = 11;
 	
-	if(altHold == NO) {
-		altHold = YES;
-		altHoldPacket.val = 1;
-		[_altHoldButton setTitle:@"AltHold ON" forState:UIControlStateNormal];
-	}
-	else {
-		altHold = NO;
-		altHoldPacket.val = 0;
-		[_altHoldButton setTitle:@"AltHold OFF" forState:UIControlStateNormal];
-	}
+	if (state == stateConnected) {
+		struct __attribute__((packed)) {
+			uint8_t header;
+			uint8_t ident;
+			uint8_t val;
+		} altHoldPacket;
+
+		NSData *data;
+		altHoldPacket.header = ((0x02 & 0x0f) << 4 | 3 << 2 |(2 & 0x03));
+		altHoldPacket.ident = 11;
 	
-	data = [NSData dataWithBytes:&altHoldPacket length:sizeof(altHoldPacket)];
-	[_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
-}
-
-- (IBAction)takeOffClick:(id)sender {
-	takeOff = 10;
-	if (altHold == NO) [self altHoldClick:nil];
-}
-
-- (IBAction)landClick:(id)sender {
-	landing = YES;
-	if (altHold == YES) [self altHoldClick:nil];
+		if(altHold == NO) {
+			altHold = YES;
+			[_altHoldButton  setTitle:@"altHold ON" forState:UIControlStateNormal];
+			altHoldPacket.val = 1;
+		}
+		else {
+			altHold = NO;
+			[_altHoldButton  setTitle:@"altHold OFF" forState:UIControlStateNormal];
+			altHoldPacket.val = 0;
+		}
+	
+		data = [NSData dataWithBytes:&altHoldPacket length:sizeof(altHoldPacket)];
+		[_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
+	}
 }
 
 - (IBAction)settingsClick:(id)sender {
@@ -433,21 +416,16 @@
 		else {
             thrust = sqrt(jsThrust)*65535*(maxThrust/100);
         }
+		
         if (thrust > 65535) thrust = 65535;
-        if (thrust < 0) thrust = 0;
+		if (thrust < 0 ) thrust = 0;
 		// send 32767 for altitude hold
 		if (altHold == YES) thrust = 32767;
-		if (landing == YES) thrust = previousThrust * 0.97;
-		if (takeOff > 0) {
-			thrust = 50000;
-			takeOff --;
-		}
-        commanderPacket.thrust = thrust;
-		// store the thrust for landing
-		previousThrust = thrust;
+		
+		commanderPacket.thrust = thrust;
 		
         data = [NSData dataWithBytes:&commanderPacket length:sizeof(commanderPacket)];
-		//NSLog(@"DATA : %@", data);
+		//NSLog(@"%@", data);
         [_connectingPeritheral writeValue:data forCharacteristic:_crtpCharacteristic type:CBCharacteristicWriteWithResponse];
 		
 		sent = NO;
